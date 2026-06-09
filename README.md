@@ -9,9 +9,10 @@
 | env.py | 2048 游戏环境（四方向滑动、合并、计分） |
 | config.py | 超参数与配置（PPO、奖励函数、UI 尺寸等） |
 | model.py | Actor-Critic 神经网络模型 |
-| gent.py | PPO Agent（含 RolloutBuffer、GAE、训练循环） |
+| agent.py | PPO Agent（含 RolloutBuffer、GAE、训练循环） |
 | 	rain.py | PPO 强化学习训练入口 |
-| un_short.py | PPO 快速验证（50 次更新） |
+| 
+un_short.py | PPO 快速验证（50 次更新） |
 | heuristic_search.py | 启发式搜索与评估（Part 2） |
 | evo_optimize.py | 遗传算法优化启发式参数（Part 3） |
 | supervised_train.py | 监督学习训练（Part 4） |
@@ -31,14 +32,14 @@
 
 用已有的虚拟环境激活:
 
-`ash
+`bash
 # 如使用项目自带的虚拟环境
 .\.2048ve\Scripts\Activate.ps1
 `
 
 ### 运行
 
-`ash
+`bash
 python main.py
 `
 
@@ -53,7 +54,7 @@ python main.py
 
 ### 单独运行
 
-`ash
+`bash
 # 训练 PPO
 python train.py
 
