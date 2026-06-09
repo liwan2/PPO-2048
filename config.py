@@ -1,0 +1,94 @@
+import os
+
+# ── 游戏 ──────────────────────────────────────────────────────────────────
+N = 4
+WIN_TILE = 2048
+ACTION_DIM = 4  # 0=上 1=下 2=左 3=右
+# log2 编码: 0=空, 1=2, 2=4, ..., 16=65536
+STATE_DIM = 17
+MAX_EPISODE_STEPS = 3026 # the year I will not be alive
+
+# ── 标准 PPO (CleanRL 风格) ─────────────────────────────────────────────────
+PPO_LR = 2.5e-4
+PPO_GAMMA = 0.99
+PPO_GAE_LAMBDA = 0.95
+PPO_CLIP_EPS = 0.2
+PPO_EPOCHS = 10
+PPO_MINI_BATCH_SIZE = 256
+PPO_ENTROPY_COEF = 0.02#0.01
+PPO_ENTROPY_COEF_END = 0.001
+PPO_ENTROPY_DECAY_UPDATES = 500
+PPO_VALUE_COEF = 0.5
+PPO_MAX_GRAD_NORM = 0.5
+PPO_TARGET_KL = 0.015
+
+# 每次更新前采集的环境步数 = N_ENVS × N_STEPS
+PPO_N_ENVS = 8
+PPO_N_STEPS = 256
+PPO_STEPS_PER_UPDATE = PPO_N_ENVS * PPO_N_STEPS  # 2048
+
+# 总更新次数 (约 2048 × 1500 ≈ 3M 步, CPU 约数小时)
+PPO_NUM_UPDATES = 1500#1500
+
+# ── 奖励 (delta 棋盘启发式, 2048 RL 经典做法) ─────────────────────────────
+REWARD_EMPTY_WEIGHT = 0.0
+REWARD_MONOTONICITY_WEIGHT = 0.0
+REWARD_SMOOTHNESS_WEIGHT = 0.0
+REWARD_CORNER_WEIGHT = 0.15
+REWARD_EDGE_WEIGHT = 0.35
+REWARD_SNAKE_WEIGHT = 0.0
+REWARD_SECOND_MAX_WEIGHT = 0.0
+REWARD_MERGE_SCALE = 0.25
+REWARD_WIN = 10.0
+REWARD_LOSS = -10.0
+REWARD_CLIP = 25.0
+REWARD_NORM = 10.0  # 缩小 returns, 稳定 value 学习
+
+# 关键里程碑奖励：让 512/1024/2048 变成明确优化目标
+REWARD_TILE_MILESTONES = {
+	128: 0.8,
+	256: 1.8,
+	512: 10.0,
+	1024: 32.0,
+	2048: 80.0,
+}
+
+# ── 训练监控 / 保存 ───────────────────────────────────────────────────────
+EVAL_WINDOW = 50
+EVAL_EVERY_UPDATES = 10
+EVAL_EPISODES = 20#100
+SAVE_EVERY_UPDATES = 50
+MIN_UPDATES_BEFORE_SAVE = 20
+EARLY_STOP_PATIENCE = 200  # 连续多少次 eval 无提升则早停
+EARLY_STOP_MIN_DELTA = 50.0
+BEST_METRIC_ALPHA = 0.5  # metric = avg_score + alpha * avg_max_tile
+
+# Inference-time lookahead for evaluation/UI (does not affect PPO training)
+LOOKAHEAD_EVAL_DEPTH = 4    #4已经有概率出2048了
+LOOKAHEAD_EVAL_BEAM = 4 #4
+LOOKAHEAD_EVAL_HEURISTIC_WEIGHT = 0.12
+LOOKAHEAD_EVAL_VALUE_WEIGHT = 1.0
+
+MODEL_PATH = "2048_ppo_model.pth"
+BEST_MODEL_PATH = "2048_ppo_best.pth"
+
+# 兼容旧 train.py 字段
+MAX_EPISODES = PPO_NUM_UPDATES * 4
+MIN_EPISODES_BEFORE_SAVE = MIN_UPDATES_BEFORE_SAVE
+MIN_EPISODES_BEFORE_ROLLBACK = 999999
+ROLLBACK_PATIENCE = 999999
+ROLLBACK_START_STAGE = 99
+SAVE_CONSECUTIVE = 1
+
+# 策略角 (最大块目标位置)
+ANCHOR_CORNER = "bottom_left"
+
+# UI 显示
+CELL_SIZE = 100
+MARGIN = 10
+PANEL_WIDTH = 250
+WIDTH = N * CELL_SIZE + (N + 1) * MARGIN
+HEIGHT = WIDTH
+SCREEN_WIDTH = WIDTH + PANEL_WIDTH
+SCREEN_HEIGHT = max(HEIGHT, 500)
+FPS = 60
