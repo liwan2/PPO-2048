@@ -23,8 +23,7 @@ def genome_to_weights(genome):
 # ── 适应度评估 ────────────────────────────────────────────────────────
 
 def evaluate_fitness(genome, n_games=10, max_steps=1024, search_depth=2):
-    """用给定权重运行若干局游戏, 返回平均得分作为适应度。"""
-    from heuristic_search import HeuristicSearchAgent
+    from heuristic_search import HeuristicSearchAgent   # 可移出到模块顶部
     weights = genome_to_weights(genome)
     agent = HeuristicSearchAgent(search_depth=search_depth, weights=weights, use_expectimax=True)
     env = Game2048Env()
@@ -37,7 +36,7 @@ def evaluate_fitness(genome, n_games=10, max_steps=1024, search_depth=2):
             action, _, _ = agent.select_action(state)
             if action is None:
                 break
-            _, _, done, _ = env.step(action)
+            state, _, done, _ = env.step(action)   # 关键：更新 state
             steps += 1
         scores.append(env.score)
     return float(np.mean(scores))
