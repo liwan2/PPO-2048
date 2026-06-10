@@ -5,7 +5,7 @@ import numpy as np
 import pygame
 
 from agent import Agent
-from heuristic_search import HeuristicSearchAgent
+from cross import HeuristicAgent
 from supervised_train import SupervisedAgent as SupervisedAgentWrapper, SupervisedNet
 from config import (
     BEST_MODEL_PATH,
@@ -96,7 +96,7 @@ def load_ppo_agent():
 
 def create_model(model_key):
     if model_key == 'heuristic':
-        return HeuristicSearchAgent(search_depth=3, use_expectimax=True), 'Heuristic (Depth=3)'
+        return HeuristicAgent(depth=3), 'Heuristic (Depth=3)'
     elif model_key == 'supervised':
         try:
             net = SupervisedNet()
@@ -112,7 +112,7 @@ def create_model(model_key):
             return agent, 'Supervised Net'
         except Exception as e:
             print(f'Failed to load supervised model: {e}')
-            return HeuristicSearchAgent(search_depth=3, use_expectimax=True), 'Heuristic (fallback)'
+            return HeuristicAgent(depth=3), 'Heuristic (fallback)'
     else:
         agent, loaded_path = load_ppo_agent()
         return agent, f'PPO ({os.path.basename(loaded_path)})'
@@ -218,6 +218,30 @@ def play_ui():
             if event.type == pygame.QUIT:
                 running = False
             elif event.type == pygame.MOUSEBUTTONDOWN:
+                # 模型选择按钮
+                clicked_model = False
+                for btn in model_btns:
+                    if btn.is_clicked(event.pos):
+                        for b in model_btns:
+                            b.active = False
+                        btn.active = True
+                        clicked_model = True
+                        new_key = MODEL_KEYS[btn.idx]
+                        if new_key != current_model_key:
+                            current_model_key = new_key
+                            current_model_agent, current_model_name = create_model(new_key)
+                            print(f"Switched to model: {current_model_name}")
+                            env.reset()
+                            is_playing = False
+                            game_over = False
+                            reached_2048 = False
+                            last_action_time = 0
+                            last_action_name = "-"
+                            last_action_valid = True
+                        break
+                if clicked_model:
+                    continue
+
                 if btn_start.is_clicked(event.pos):
                     if not game_over:
                         is_playing = True
