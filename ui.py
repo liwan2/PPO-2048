@@ -5,6 +5,8 @@ import numpy as np
 import pygame
 
 from agent import Agent
+from heuristic_search import HeuristicSearchAgent
+from supervised_train import SupervisedAgent as SupervisedAgentWrapper, SupervisedNet
 from config import (
     BEST_MODEL_PATH,
     CELL_SIZE,
@@ -18,6 +20,7 @@ from config import (
     SCREEN_WIDTH,
     WIDTH,
     WIN_TILE,
+    SUPERVISED_MODEL_PATH,
 )
 from env import Game2048Env
 
@@ -77,14 +80,52 @@ class Button:
         return self.rect.collidepoint(pos)
 
 
-def _load_agent_model(agent):
-    """优先加载最优模型, 其次加载最新 checkpoint。"""
+MODEL_NAMES = ['Heuristic Search', 'Supervised Net', 'PPO (RL)']
+MODEL_KEYS = ['heuristic', 'supervised', 'ppo']
+
+
+def load_ppo_agent():
+    agent = Agent()
     for path in (BEST_MODEL_PATH, MODEL_PATH):
         if path and os.path.exists(path):
             agent.load_model(path)
-            return path
+            return agent, path
     agent.load_model(MODEL_PATH)
-    return None
+    return agent, MODEL_PATH
+
+
+def create_model(model_key):
+    if model_key == 'heuristic':
+        return HeuristicSearchAgent(search_depth=3, use_expectimax=True), 'Heuristic (Depth=3)'
+    elif model_key == 'supervised':
+        try:
+            net = SupervisedNet()
+            if os.path.exists(SUPERVISED_MODEL_PATH):
+                import torch
+                ckpt = torch.load(SUPERVISED_MODEL_PATH, map_location='cpu', weights_only=False)
+                if 'model_state' in ckpt:
+                    net.load_state_dict(ckpt['model_state'])
+                else:
+                    net.load_state_dict(ckpt)
+            net.eval()
+            agent = SupervisedAgentWrapper(net)
+            return agent, 'Supervised Net'
+        except Exception as e:
+            print(f'Failed to load supervised model: {e}')
+            return HeuristicSearchAgent(search_depth=3, use_expectimax=True), 'Heuristic (fallback)'
+    else:
+        agent, loaded_path = load_ppo_agent()
+        return agent, f'PPO ({os.path.basename(loaded_path)})'
+
+
+def select_action_from_model(model_key, model_agent, state):
+    if model_key == 'heuristic':
+        action, _, _ = model_agent.select_action(state)
+    elif model_key == 'supervised':
+        action, _, _ = model_agent.select_action(state)
+    else:
+        action, _, _ = model_agent.select_action(state, evaluate=True)
+    return action
 
 
 def _tile_color(value):
@@ -103,10 +144,28 @@ def _apply_action(env, action):
     return len(env.get_valid_actions()) == 0, True
 
 
+class ModelSelectBtn:
+    def __init__(self, x, y, width, height, text, font, idx):
+        self.rect = pygame.Rect(x, y, width, height)
+        self.text = text
+        self.font = font
+        self.idx = idx
+        self.active = False
+        self.color = (143, 122, 102)
+        self.active_color = (101, 67, 33)
+    def draw(self, screen):
+        color = self.active_color if self.active else self.color
+        pygame.draw.rect(screen, color, self.rect, border_radius=5)
+        text_surf = self.font.render(self.text, True, (249, 246, 242))
+        screen.blit(text_surf, (self.rect.centerx - text_surf.get_width() // 2, self.rect.centery - text_surf.get_height() // 2))
+    def is_clicked(self, pos):
+        return self.rect.collidepoint(pos)
+
+
 def play_ui():
     pygame.init()
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-    pygame.display.set_caption("2048 PPO Agent")
+    pygame.display.set_caption("2048 AI - 多模型可视化")
 
     try:
         font_large = pygame.font.SysFont("arial", 40, bold=True)
@@ -119,10 +178,9 @@ def play_ui():
 
     # UI 模式: max_episode_steps=0 表示不设步数上限
     env = Game2048Env(max_episode_steps=0)
-    agent = Agent()
-    loaded_path = _load_agent_model(agent)
-    if loaded_path:
-        print(f"UI loaded model: {loaded_path}")
+    current_model_key = 'heuristic'
+    current_model_agent, current_model_name = create_model(current_model_key)
+    print(f'UI model: {current_model_name}')
 
     clock = pygame.time.Clock()
 
@@ -135,11 +193,22 @@ def play_ui():
     last_action_valid = True
 
     panel_x = WIDTH + MARGIN
-    btn_start = Button(panel_x, 50, 200, 40, "Start AI", font_medium)
-    btn_stop = Button(panel_x, 100, 200, 40, "Pause AI", font_medium)
-    btn_reset = Button(panel_x, 150, 200, 40, "Reset", font_medium)
-    btn_speed_up = Button(panel_x, 200, 95, 40, "Speed +", font_small)
-    btn_speed_down = Button(panel_x + 105, 200, 95, 40, "Speed -", font_small)
+    model_btns = []
+    btn_w = 75
+    btn_gap = 5
+    btn_h = 28
+    model_start_y = 50
+    for i, name in enumerate(MODEL_NAMES):
+        short = ['Search', 'Supervised', 'PPO'][i]
+        btn = ModelSelectBtn(panel_x + i * (btn_w + btn_gap), model_start_y, btn_w, btn_h, short, font_small, i)
+        btn.active = (i == 0)
+        model_btns.append(btn)
+    btn_y0 = model_start_y + btn_h + 12
+    btn_start = Button(panel_x, btn_y0, 200, 35, 'Start AI', font_medium)
+    btn_stop = Button(panel_x, btn_y0 + 45, 200, 35, 'Pause AI', font_medium)
+    btn_reset = Button(panel_x, btn_y0 + 90, 200, 35, 'Reset', font_medium)
+    btn_speed_up = Button(panel_x, btn_y0 + 135, 95, 35, 'Speed +', font_small)
+    btn_speed_down = Button(panel_x + 105, btn_y0 + 135, 95, 35, 'Speed -', font_small)
 
     running = True
     while running:
@@ -179,9 +248,7 @@ def play_ui():
         if is_playing and not game_over:
             if current_time - last_action_time > update_interval_ms:
                 state = env._get_state()
-                action, _, _ = agent.select_action(state, evaluate=True)
-
-                # agent 已做动作掩码; 若仍无效则跳过本帧, 不做随机补救
+                action = select_action_from_model(current_model_key, current_model_agent, state)
                 if action not in env.get_valid_actions():
                     valid_actions = env.get_valid_actions()
                     if not valid_actions:
@@ -226,6 +293,8 @@ def play_ui():
                         ),
                     )
 
+        for btn in model_btns:
+            btn.draw(screen)
         btn_start.draw(screen)
         btn_stop.draw(screen)
         btn_reset.draw(screen)
@@ -242,21 +311,20 @@ def play_ui():
             status = "Paused (Arrow/WASD)"
 
         info_texts = [
-            f"Score: {env.score}",
-            f"Steps: {env.steps}",
-            f"Max Tile: {int(np.max(env.board))}",
-            f"Last Move: {last_action_name}" + ("" if last_action_valid else " (invalid)"),
-            f"Speed: {update_interval_ms} ms",
-            f"Status: {status}",
+            f'Model: {current_model_name}',
+            f'Score: {env.score}',
+            f'Steps: {env.steps}',
+            f'Max Tile: {int(np.max(env.board))}',
+            f'Last Move: {last_action_name}' + ('' if last_action_valid else ' (invalid)'),
+            f'Speed: {update_interval_ms} ms',
+            f'Status: {status}',
         ]
-        if loaded_path:
-            info_texts.append(f"Model: {loaded_path}")
 
-        y_offset = 270
+        y_offset = btn_y0 + 180
         for info in info_texts:
             surf = font_medium.render(info, True, COLOR_TEXT)
             screen.blit(surf, (panel_x, y_offset))
-            y_offset += 36
+            y_offset += 30
 
         hint = font_small.render("Keys: Up Down Left Right / WASD", True, COLOR_TEXT)
         screen.blit(hint, (panel_x, SCREEN_HEIGHT - 40))
